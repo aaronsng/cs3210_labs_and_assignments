@@ -434,7 +434,14 @@ int goi(int nThreads, int nGenerations, const int *startWorld, int nRows, int nC
 #endif
     /* MODIFICATION ENDS HERE*/
 
+    // Clean up my mess
     free(world_);
+    free(divided_completed_);
+    free(divided_thread_completed_);
+    free(divided_death_toll_);
+    free(rowStartCollection_);
+    free(rowEndCollection_);
+
 
     clock_gettime(CLOCK_REALTIME, &end);
     long seconds = end.tv_sec - begin.tv_sec;

@@ -311,7 +311,12 @@ int goi(int nThreads, int nGenerations, const int *startWorld, int nRows, int nC
     for (int i = 0; i < nThreads; i++) 
         deathToll += divided_death_toll_[i];
     
+    // Clean up my mess
     free(world);
+    free(divided_death_toll_);
+    free(rowStartCollection);
+    free(rowEndCollection);
+
     clock_gettime(CLOCK_REALTIME, &end);
     long seconds = end.tv_sec - begin.tv_sec;
     long nanoseconds = end.tv_nsec - begin.tv_nsec;
