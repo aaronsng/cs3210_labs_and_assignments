@@ -49,14 +49,15 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    printf("<INPUT_PATH>: %s\n", argv[1]);
+    // remove to allow ease of grading
+    /*printf("<INPUT_PATH>: %s\n", argv[1]);
     printf("<OUTPUT_PATH>: %s\n", argv[2]);
     printf("<GRID_X>: %s\n", argv[3]);
     printf("<GRID_Y>: %s\n", argv[4]);
     printf("<GRID_Z>: %s\n", argv[5]);
     printf("<BLOCK_X>: %s\n", argv[6]);
     printf("<BLOCK_Y>: %s\n", argv[7]);
-    printf("<BLOCK_Z>: %s\n", argv[8]);
+    printf("<BLOCK_Z>: %s\n", argv[8]);*/
 
 #if EXPORT_GENERATIONS
     FILE *exportFile = NULL;

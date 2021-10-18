@@ -16,6 +16,9 @@
 // any integer value; changing this to a non-zero value may break the code
 #define DEAD_FACTION 0
 
+// block size for block-cyclic distribution
+#define BLOCK_SIZE 1
+
 /*
  * Gets the value at. GPU implementation
  */
@@ -165,7 +168,7 @@ __device__ int getNextState(const int *currWorld, const int *invaders, int nRows
  * invasionPlans -> Located in global memory
  * invasionTimes -> Located in global memory
  */
-__global__ void simulate_per_thread(int * world, int * wholeNewWorld, int * invasionPlans, int * nRows, int * nCols, int * row_start_collection, int * row_end_collection, int * col_start_collection, int * col_end_collection, int * death_toll_collection) 
+__global__ void simulate_per_thread(int * world, int * wholeNewWorld, int * invasionPlans, int * nRows, int * nCols, int * death_toll_collection, int * col_start_collection, int * col_end_collection) 
 {
     // localised death toll, to minimise branching
     int deathToll_ = 0;
@@ -173,8 +176,7 @@ __global__ void simulate_per_thread(int * world, int * wholeNewWorld, int * inva
     // blockIndex will divide the problem as in Assignment 1. The general strategy in Assignment 1 were
     // coarsely grained tasks performed over the row
     int blockIndex = blockIdx.x * gridDim.y * gridDim.z + blockIdx.y * gridDim.z + blockIdx.z;
-    int rowStart = row_start_collection[blockIndex];
-    int rowEnd = row_end_collection[blockIndex];
+    int blockCount = gridDim.x * gridDim.y * gridDim.z;
 
     // threadIndex will divide the problem further. Now instead of performing over each individual row
     // GPU programming calls for greater granularity, and hence each individual row maybe too big a task
@@ -184,22 +186,29 @@ __global__ void simulate_per_thread(int * world, int * wholeNewWorld, int * inva
     int colEnd = col_end_collection[threadIndex];
 
     //printf("\n%d %d\n", blockIndex, threadIndex);
-    //printf("\n%d %d %d %d %d %d\n", rowStart, rowEnd, colStart, colEnd, blockIndex, threadIndex);
+    //printf("\n%d %d %d %d\n", colStart, colEnd, blockIndex, threadIndex);
 
     // check if there is an invasion invoked in this kernel call
-    for (int row = rowStart; row < rowEnd; row++) 
+    while (blockIndex < *nRows)
     {
-        for (int col = colStart; col < colEnd; col++)
+        for (int row = blockIndex; row < blockIndex + BLOCK_SIZE; row++) 
         {
-            bool diedDueToFighting;
-            int nextState = getNextState(world, invasionPlans, *nRows, *nCols, row, col, &diedDueToFighting);
-            setValueAtDevice(wholeNewWorld, *nRows, *nCols, row, col, nextState);
-            
-            // This is possible as booleans have a value of 1. reduce branching within kernel as well
-            deathToll_ += diedDueToFighting; 
+            for (int col = colStart; col < colEnd; col++)
+            {
+                bool diedDueToFighting;
+                int nextState = getNextState(world, invasionPlans, *nRows, *nCols, row, col, &diedDueToFighting);
+                setValueAtDevice(wholeNewWorld, *nRows, *nCols, row, col, nextState);
+                
+                // This is possible as booleans have a value of 1. reduce branching within kernel as well
+                deathToll_ += diedDueToFighting; 
+            }
         }
+
+        // printf("blockIndex: %d, globalIndex: %d, deathToll: %d\n", blockIndex, blockIndex * blockDim.x * blockDim.y * blockDim.z + threadIndex, deathToll_);
+        death_toll_collection[blockIndex * blockDim.x * blockDim.y * blockDim.z + threadIndex] += deathToll_;
+        blockIndex += blockCount;
+        deathToll_ = 0;
     }
-    death_toll_collection[blockIndex * blockDim.x * blockDim.y * blockDim.z + threadIndex] += deathToll_;
 }
 
 /**
@@ -224,8 +233,8 @@ void check_cuda_errors()
 int goi(int nThreads, int nGenerations, const int *startWorld, int nRows, int nCols, int nInvasions, const int *invasionTimes, int **invasionPlans, dim3 gridDim_, dim3 blockDim_)
 { 
     // calculate wall clock
-    struct timespec begin, end;
-    clock_gettime(CLOCK_REALTIME, &begin);
+    /*struct timespec begin, end;
+    cl1ock_gettime(CLOCK_REALTIME, &begin);*/
 
     // send nRows over
     int * d_n_rows;
@@ -240,57 +249,27 @@ int goi(int nThreads, int nGenerations, const int *startWorld, int nRows, int nC
     int * d_world;
     cudaMalloc((void**) &d_world, nRows * nCols * sizeof(int));
     cudaMemcpy(d_world, startWorld, sizeof(int) * nRows * nCols, cudaMemcpyHostToDevice);
+    //nGenerations = 1; 
 
-    // start computing the start and end indices of the various rows
-    int * d_row_start_collection = NULL;
-    int * d_row_end_collection = NULL;
-    int blockCount = gridDim_.x * gridDim_.y * gridDim_.z;
-    int * row_start_collection;
-    int * row_end_collection;
-    int baseRowWidth = nRows / blockCount;
-    int remnant = nRows % blockCount;
-    int startIndex, endIndex = 0;
-    cudaMallocHost((void **) &row_start_collection, sizeof(int) * blockCount);
-    cudaMallocHost((void **) &row_end_collection, sizeof(int) * blockCount);
-    
-    for (int i = 0; i < blockCount; i++) 
-    {
-        startIndex = endIndex;
-        if (i < (nThreads - remnant)) 
-        {
-            endIndex = (startIndex + baseRowWidth) > nRows ? nRows : (startIndex + baseRowWidth);
-        }
-        else 
-        {
-            endIndex = (startIndex + baseRowWidth + 1) > nRows ? nRows : (startIndex + baseRowWidth + 1);
-        }
-
-        row_start_collection[i] = startIndex;
-        row_end_collection[i] = endIndex;
-    }
-
-    // malloc and copy over
-    cudaMalloc((void**) &d_row_start_collection, blockCount * sizeof(int));
-    cudaMemcpy(d_row_start_collection, row_start_collection, blockCount * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMalloc((void**) &d_row_end_collection, blockCount * sizeof(int));
-    cudaMemcpy(d_row_end_collection, row_end_collection, blockCount * sizeof(int), cudaMemcpyHostToDevice);
-    
     // start computing the start and end indices of the various columns
     int * d_col_start_collection = NULL;
     int * d_col_end_collection = NULL;
+    int * d_death_toll_collection = NULL;
     int threadCount = blockDim_.x * blockDim_.y * blockDim_.z;
     int * col_start_collection;
     int * col_end_collection;
+    int * death_toll_collection;
     int baseColWidth = nCols / threadCount;
-    remnant = nCols % threadCount;
-    endIndex = 0;
+    int remnant = nCols % threadCount;
+    int startIndex = 0, endIndex = 0;
     cudaMallocHost((void **) &col_start_collection, sizeof(int) * threadCount);
     cudaMallocHost((void **) &col_end_collection, sizeof(int) * threadCount);
-    
+    cudaMallocHost((void **) &death_toll_collection, sizeof(int) * nRows * threadCount);
+
     for (int i = 0; i < threadCount; i++) 
     {
         startIndex = endIndex;
-        if (i < (nThreads - remnant)) 
+        if (i < (threadCount - remnant)) 
         {
             endIndex = (startIndex + baseColWidth) > nCols ? nCols : (startIndex + baseColWidth);
         }
@@ -308,12 +287,8 @@ int goi(int nThreads, int nGenerations, const int *startWorld, int nRows, int nC
     cudaMemcpy(d_col_start_collection, col_start_collection, threadCount * sizeof(int), cudaMemcpyHostToDevice);
     cudaMalloc((void**) &d_col_end_collection, threadCount * sizeof(int));
     cudaMemcpy(d_col_end_collection, col_end_collection, threadCount * sizeof(int), cudaMemcpyHostToDevice);
-
-    // create a death_toll_collection
-    int * d_death_toll_collection;
-    int * death_toll_collection;
-    cudaMallocHost((void**) &death_toll_collection, sizeof(int) * threadCount * blockCount);
-    cudaMalloc((void**) &d_death_toll_collection, sizeof(int) * threadCount * blockCount);
+    cudaMalloc((void**) &d_death_toll_collection, nRows * threadCount * sizeof(int));
+    cudaMemcpy(d_death_toll_collection, death_toll_collection, nRows * threadCount * sizeof(int), cudaMemcpyHostToDevice);
 
 #if PRINT_GENERATIONS
     printf("\n=== WORLD 0 ===\n");
@@ -326,10 +301,6 @@ int goi(int nThreads, int nGenerations, const int *startWorld, int nRows, int nC
 
     // Begin simulating
     int invasionIndex = 0;
-    
-    // initialise transition world
-    int * d_temp_world;
-    cudaMalloc((void**) &d_temp_world, sizeof(int) * nRows * nCols);
     
     for (int i = 1; i <= nGenerations; i++)
     {
@@ -353,9 +324,9 @@ int goi(int nThreads, int nGenerations, const int *startWorld, int nRows, int nC
         cudaMalloc((void**) &d_temp_world, sizeof(int) * nRows * nCols);
         
         // get new states for each cell
-        simulate_per_thread<<<gridDim_, blockDim_>>>(d_world, d_temp_world, d_invasion, d_n_rows, d_n_cols, d_row_start_collection, d_row_end_collection, d_col_start_collection, d_col_end_collection, d_death_toll_collection);
+        simulate_per_thread<<<gridDim_, blockDim_>>>(d_world, d_temp_world, d_invasion, d_n_rows, d_n_cols, d_death_toll_collection, d_col_start_collection, d_col_end_collection);
         check_cuda_errors();
-        //cudaDeviceSynchronize();
+        // cudaDeviceSynchronize();
         
         // swap the worlds
         cudaFree(d_world);
@@ -389,27 +360,34 @@ int goi(int nThreads, int nGenerations, const int *startWorld, int nRows, int nC
 #endif
         
     }
-
-    cudaFree(d_world); 
-    cudaFreeHost(row_start_collection);
-    cudaFreeHost(col_end_collection);
-    cudaFreeHost(row_end_collection);
-    cudaFreeHost(col_start_collection);
     
     int deathToll = 0;
-    
-    cudaMemcpy(death_toll_collection, d_death_toll_collection, sizeof(int) * blockCount * threadCount, cudaMemcpyDeviceToHost);
-    for (int i = 0; i < (blockCount * threadCount); i++) 
+    cudaMemcpy(death_toll_collection, d_death_toll_collection, nRows * threadCount * sizeof(int), cudaMemcpyDeviceToHost);
+    for (int i = 0; i < (nRows * threadCount); i++)
     {
         deathToll += death_toll_collection[i];
     }
     
-    clock_gettime(CLOCK_REALTIME, &end);
+    /*clock_gettime(CLOCK_REALTIME, &end);
     long seconds = end.tv_sec - begin.tv_sec;
     long nanoseconds = end.tv_nsec - begin.tv_nsec;
     double elapsed = seconds + nanoseconds * 1e-9;
+    
+    printf("Time taken %.2f, %d\n", elapsed, deathToll);*/
+    
+    // free arrays on device
+    cudaFree(d_world); 
+    cudaFree(d_n_rows);
+    cudaFree(d_n_cols);
+    cudaFree(d_col_start_collection);
+    cudaFree(d_col_end_collection);
+    cudaFree(d_death_toll_collection);
 
-    printf("Time taken %.2f\n", elapsed);
+    // free arrays on host
+    cudaFreeHost(col_end_collection);
+    cudaFreeHost(col_start_collection);
+    cudaFreeHost(death_toll_collection);
+    cudaFreeHost(invasionPlans);
 
     return deathToll;
 }
