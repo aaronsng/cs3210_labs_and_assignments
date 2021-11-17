@@ -22,6 +22,11 @@ int main(int argc, char** argv) {
     char *output_file_name = argv[5];
     int map_reduce_task_num = atoi(argv[6]);
 
+#if DEBUG
+    // Initialise the wall clock time variables
+    double mpi_start = MPI_Wtime();
+#endif
+
     // Identify the specific map function to use
     MapTaskOutput* (*map) (char*);
     switch(map_reduce_task_num){
@@ -98,6 +103,8 @@ int main(int argc, char** argv) {
 #endif
         }
         
+        free(total_workload);
+
         // Send kill signal to processes
         for (int killed_processes = 1; killed_processes <= num_map_workers; killed_processes++) {
             // Send to the free slave
@@ -137,6 +144,10 @@ int main(int argc, char** argv) {
 
         // Close file and done!
         fclose(output_file);
+
+#if DEBUG
+        printf("Total execution timing: %f\n", MPI_Wtime() - mpi_start);
+#endif
 
     } else if ((rank >= 1) && (rank <= num_map_workers)) {
         // Initialise random variables
@@ -292,8 +303,10 @@ int main(int argc, char** argv) {
             int i = 0;
             while (val_iterator != NULL) {
                 val[i] = val_iterator->val;
+                IntCollection * free_iterator = val_iterator;
                 val_iterator = val_iterator->next;
                 i++;
+                free(free_iterator);
             }
             free(val_iterator);
 
@@ -301,8 +314,11 @@ int main(int argc, char** argv) {
 #if DEBUG
             printf("Rank (%d): Key->%s, value->%d\n", rank, output_array[j].key, output_array[j].val);
 #endif
+            CharCollection * free_key = iterator_key;
             iterator_key = iterator_key->next;
             j++;
+            free(val);
+            free(free_key);
         }
         
         stream_size = length_kvs * CHAR_STREAM_LEN;
@@ -313,8 +329,11 @@ int main(int argc, char** argv) {
             keyvalue_to_char_stream(&output_array[j], current_stream);
         }       
 
+        // Send over to master
         MPI_Send(&stream_size, 1, MPI_INT, 0, rank, MPI_COMM_WORLD);
         MPI_Send(send_stream, stream_size, MPI_UNSIGNED_CHAR, 0, rank, MPI_COMM_WORLD);
+        
+        free(send_stream);
     }
 
 
