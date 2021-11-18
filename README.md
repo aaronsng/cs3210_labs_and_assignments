@@ -1,9 +1,9 @@
-#### CS3210 Parallel Computing
+## CS3210 Parallel Computing
 
 Done by Aaron Sng of NTU REP (EEE)
 
-#### Feedback and Grades for Assignments / Labs
-###### Assignment 1:
+## Feedback and Grades for Assignments / Labs
+#### Assignment 1:
 10.5 / 12
 
 9.5 = 3 (out of 3, testing pthreads) + 1 (out of 3, testing OpenMP) + 1 (out of 1, testcases) + 1.5 (out of 2, implementation explanations in the report & code quality) + 2 (out of 4, measurement and analysis in report) + 1 (out of 1, non-trivial details in report)
@@ -35,11 +35,8 @@ Good number of measurements taken.
 Updated 31 Oct:
 +1 for implementation
 
-Bellcurve:
-Mean: 10.31
-Median: 11
-25th - 75th Percentile: 10 - 11.5
+Mean: 10.31, Median: 11, 25th - 75th Percentile: 10 - 11.5
 
-###### Lab 1:
+#### Lab 1:
 Implementations are ok, be careful when you implement a infinite looping program - the only way to terminate it is via sending signal and doing so will skip all the cleanup you do at the end of the program. You can look into using signal catcher for this.
 Good explanation for ex9 as well. Maybe you can try increasing the limits to see whether the same observation holds?
