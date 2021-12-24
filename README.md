@@ -38,6 +38,8 @@ Updated 31 Oct:
 Mean: 10.31, Median: 11, 25th - 75th Percentile: 10 - 11.5
 
 #### Assignment 2:
+10 / 10
+
 10 = 5 (out of 5, CUDA implementation + submission archive) + 1 (out of 1, testcases) + 2 (out of 2, implementation explanations in the report) + 2 (out of 2, measurement and analysis in report)
 0 (out of 2, data/task distribution analysis, shown in gradebook Bonus) 
 0 (out of 1, bonus for outstanding analysis/implementation, shown in gradebook Bonus)
@@ -78,6 +80,8 @@ Implementation mark breakdown:
 Mean: 8.7052, Median: 9.5, 25th - 75th Percentile: 8.5 - 10
 
 #### Assignment 3:
+13 / 13
+
 13 = 4 (out of 4, testing correctnesss) + 2 (out of 2, testing speedup) + 1 (out of 1, testcases) + 2 (out of 2, implementation explanations in the report & code quality) + 3 (out of 3, measurement and analysis in report) + 1 (out of 1, non-trivial details in report) 
 1 (out of 1, bonus for performance analysis, shown in gradebook Bonus)
 1 (out of 2, bonus for mapreduce comparison, shown in gradebook Bonus)
